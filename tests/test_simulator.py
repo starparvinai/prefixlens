@@ -82,6 +82,53 @@ def test_totally_disjoint_requests_share_nothing():
     assert result.cached_prefix_blocks == 0
 
 
+def test_first_divergent_block_is_zero_on_full_miss():
+    sim = RadixCacheSimulator(block_size=16, capacity_blocks=1024)
+    result = sim.process(Request(request_id="r1", token_ids=tuple(range(32))))
+
+    assert result.first_divergent_block == 0
+
+
+def test_first_divergent_block_is_none_on_full_hit():
+    sim = RadixCacheSimulator(block_size=16, capacity_blocks=1024)
+    tokens = tuple(range(32))
+    sim.process(Request(request_id="r1", token_ids=tokens))
+
+    result = sim.process(Request(request_id="r2", token_ids=tokens))
+
+    assert result.first_divergent_block is None
+
+
+def test_first_divergent_block_at_end_of_shared_prefix():
+    sim = RadixCacheSimulator(block_size=16, capacity_blocks=1024)
+    sim.process(Request(request_id="r1", token_ids=tuple(range(48))))  # 3 blocks
+
+    # First 32 tokens (2 blocks) shared, third block diverges
+    r2_tokens = tuple(range(32)) + tuple(range(1000, 1016))
+    result = sim.process(Request(request_id="r2", token_ids=r2_tokens))
+
+    assert result.cached_prefix_blocks == 2
+    assert result.first_divergent_block == 2  # 0-indexed: block 0, 1 matched; block 2 missed
+
+
+def test_first_divergent_block_is_none_on_empty_prompt():
+    sim = RadixCacheSimulator(block_size=16, capacity_blocks=1024)
+    result = sim.process(Request(request_id="r1", token_ids=()))
+
+    assert result.total_prompt_blocks == 0
+    assert result.cached_prefix_blocks == 0
+    assert result.first_divergent_block is None
+
+
+def test_first_divergent_block_is_none_on_sub_block_prompt():
+    """A prompt with only a partial trailing block has 0 total blocks — no divergence to report."""
+    sim = RadixCacheSimulator(block_size=16, capacity_blocks=1024)
+    result = sim.process(Request(request_id="r1", token_ids=tuple(range(10))))
+
+    assert result.total_prompt_blocks == 0
+    assert result.first_divergent_block is None
+
+
 def test_tree_grows_with_new_blocks():
     sim = RadixCacheSimulator(block_size=16, capacity_blocks=1024)
     assert len(sim.tree) == 0

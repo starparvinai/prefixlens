@@ -10,6 +10,9 @@ class ProcessResult:
     request_id: str
     cached_prefix_blocks: int
     total_prompt_blocks: int
+    first_divergent_block: int | None
+    """0-indexed position of the first block that failed to hit, or None if the
+    request was a full hit (or had zero complete blocks)."""
 
 
 @dataclass(frozen=True)
@@ -47,10 +50,12 @@ class RadixCacheSimulator:
         chain = block_hash_chain(req.token_ids, self.block_size)
         matched, _touched = self._tree.match_and_insert(chain, now=self._step)
 
+        first_divergent = matched if matched < len(chain) else None
         result = ProcessResult(
             request_id=req.request_id,
             cached_prefix_blocks=matched,
             total_prompt_blocks=len(chain),
+            first_divergent_block=first_divergent,
         )
         self._records.append(result)
         return result
