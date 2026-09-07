@@ -1,6 +1,8 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
+from prefixlens.hashing import block_hash_chain
 from prefixlens.request import Request
+from prefixlens.tree import RadixTree
 
 
 @dataclass(frozen=True)
@@ -27,22 +29,28 @@ class RadixCacheSimulator:
             raise ValueError("block_size must be positive")
         if capacity_blocks <= 0:
             raise ValueError("capacity_blocks must be positive")
+        if hash_fn != "fnv1a":
+            raise ValueError(f"unsupported hash_fn: {hash_fn!r}")
         self.block_size = block_size
         self.capacity_blocks = capacity_blocks
         self.hash_fn = hash_fn
+        self._tree = RadixTree()
         self._records: list[ProcessResult] = []
+        self._step = 0
 
     @property
-    def tree(self) -> object:
-        raise NotImplementedError("tree inspection lands in a later commit")
+    def tree(self) -> RadixTree:
+        return self._tree
 
     def process(self, req: Request) -> ProcessResult:
-        total_prompt_blocks = len(req.token_ids) // self.block_size
-        cached_prefix_blocks = 0  # empty cache — everything is a miss for now
+        self._step += 1
+        chain = block_hash_chain(req.token_ids, self.block_size)
+        matched, _touched = self._tree.match_and_insert(chain, now=self._step)
+
         result = ProcessResult(
             request_id=req.request_id,
-            cached_prefix_blocks=cached_prefix_blocks,
-            total_prompt_blocks=total_prompt_blocks,
+            cached_prefix_blocks=matched,
+            total_prompt_blocks=len(chain),
         )
         self._records.append(result)
         return result
