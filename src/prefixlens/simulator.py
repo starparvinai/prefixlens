@@ -40,15 +40,29 @@ class RadixCacheSimulator:
         self._tree = RadixTree()
         self._records: list[ProcessResult] = []
         self._step = 0
+        self._evictions = 0
 
     @property
     def tree(self) -> RadixTree:
         return self._tree
 
+    @property
+    def evictions(self) -> int:
+        return self._evictions
+
     def process(self, req: Request) -> ProcessResult:
         self._step += 1
         chain = block_hash_chain(req.token_ids, self.block_size)
         matched, _touched = self._tree.match_and_insert(chain, now=self._step)
+
+        # Enforce capacity after insertion. Real allocators briefly exceed the
+        # bound mid-request; we mirror that — the caller-visible state after
+        # each process() respects capacity_blocks.
+        while len(self._tree) > self.capacity_blocks:
+            evicted = self._tree.evict_lru_leaf()
+            if evicted is None:
+                break  # nothing left to evict; capacity < 1 would be a config bug
+            self._evictions += 1
 
         first_divergent = matched if matched < len(chain) else None
         result = ProcessResult(
