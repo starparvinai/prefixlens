@@ -19,6 +19,10 @@ class ProcessResult:
     attribution can distinguish 'unique-content-per-request' (UUID injection)
     from 'same-content-per-request-but-evicted' (capacity thrashing). None when
     the request was a full hit or had no complete blocks."""
+    token_ids: tuple[int, ...] = ()
+    """Full token stream of the request, kept as a shared reference (no copy)
+    to the Request's tuple. Retained for per-request explain — reconstructing
+    a block-by-block trace after the simulation has already run."""
 
 
 @dataclass(frozen=True)
@@ -142,6 +146,17 @@ class RadixCacheSimulator:
     def evictions(self) -> int:
         return self._evictions
 
+    def find_result(self, request_id: str) -> ProcessResult | None:
+        """Return the ProcessResult for a given request_id, or None if absent.
+
+        Linear scan — fine for corpora up to hundreds of thousands of requests
+        and only called from explain paths, not the hot loop.
+        """
+        for r in self._records:
+            if r.request_id == request_id:
+                return r
+        return None
+
     def process(self, req: Request) -> ProcessResult:
         self._step += 1
         chain = block_hash_chain(req.token_ids, self.block_size)
@@ -170,6 +185,7 @@ class RadixCacheSimulator:
             first_divergent_block=first_divergent,
             tags=req.tags,
             diverging_block_tokens=diverging_block,
+            token_ids=req.token_ids,
         )
         self._records.append(result)
         return result

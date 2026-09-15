@@ -1,5 +1,24 @@
 # Design notes
 
+## Explain mode: two views, bolted together on purpose
+
+`explain` answers "why did request X miss?" by combining two things that individually don't add up to a diagnosis:
+
+1. **A per-request block-by-block trace** — for the target request, walk its chain position-by-position, marking each block HIT or MISS. Trivially derivable from `first_divergent_block` on that request's `ProcessResult`.
+2. **The aggregate divergence context for the request's tag buckets** — from the corpus-wide report we already build, pull the divergence signal for whichever tag buckets this request belongs to, at exactly the position it diverged. This tells the operator "you're not a one-off; 142 requests in tenant=widgets have this same shape."
+
+Neither view alone answers the operator's question. The trace shows *where* the request broke; the context shows *what class of problem* that is. Together they turn one paged incident into a systemic diagnosis.
+
+### State preservation shape
+
+The cost of `explain` is that we retain the *full token stream* of every request on `ProcessResult.token_ids`. Storing 500 tokens × 10K requests = ~40MB for a big corpus — cheap. And because `token_ids` is an immutable tuple, the reference is shared between `Request` and `ProcessResult` (no copy), so the memory hit is exactly one copy of each request's tokens, not two.
+
+### What `explain` deliberately does not do in v0.1
+
+**Attribution — "which earlier request seeded the block we hit?"** — genuinely useful, but requires tracking `first_inserted_by_request_id` on `RadixNode` and deciding what happens to that field across evict-then-reinsert cycles (keep the original inserter? overwrite with the latest?). Punted to v0.2. In v0.1, `explain` says "block 2 hit," not "block 2 hit against a node originally inserted by req_98 at step 12."
+
+**Pure function boundary.** `explain_request(sim, request_id, report) -> RequestExplanation` takes both the simulator and the pre-computed report. It doesn't recompute the report on each call. Matters if the CLI ends up explaining several requests in one session (a `--request-ids` list flag, later); the corpus-wide analysis runs once, then O(N) lookups per request explained.
+
 ## Validate mode: what we're differentially testing, and why the top-line hit rate is enough
 
 `prefixlens validate` compares one number — the aggregate prefix-cache hit rate — between our CPU sim and a real vLLM `/metrics` scrape taken after the same request stream ran on both. It's a differential test in the same sense a JIT is differentially tested against its interpreter or a new consensus implementation against a reference: the sim IS a reimplementation of vLLM's block-manager behavior, and if it can't reproduce the single most-aggregate output, the finer-grained outputs (per-tenant, per-position) are almost certainly wrong too.

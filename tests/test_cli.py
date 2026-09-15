@@ -435,6 +435,125 @@ def test_validate_surfaces_metrics_parse_error(tmp_path):
         ])
 
 
+# ---- explain subcommand --------------------------------------------------
+
+
+def _write_chen_like_corpus(tmp_path):
+    """Small corpus: 3 acme requests (shared prefix) + 3 widgets requests
+    (unique first token each). Enough to exercise both HIT and MISS traces."""
+    corpus = tmp_path / "chen.jsonl"
+    lines = []
+    shared = list(range(1000, 1000 + 64))  # 4 blocks
+    for i in range(3):
+        lines.append(json.dumps({
+            "request_id": f"acme-{i}",
+            "token_ids": shared,
+            "tenant": "acme",
+        }))
+    for i in range(3):
+        toks = [9_000_000 + i] + list(range(2001, 2001 + 63))
+        lines.append(json.dumps({
+            "request_id": f"widgets-{i}",
+            "token_ids": toks,
+            "tenant": "widgets",
+        }))
+    corpus.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return corpus
+
+
+def test_explain_prints_block_trace_for_a_hit_request(tmp_path, capsys):
+    corpus = _write_chen_like_corpus(tmp_path)
+    # acme-2 is the third acme request → should fully hit (acme-0 seeded, acme-1 hit).
+    exit_code = main([
+        "explain", str(corpus),
+        "--request-id", "acme-2",
+        "--block-size", "16",
+        "--capacity-blocks", "100",
+    ])
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "acme-2" in out
+    assert "tenant=acme" in out
+    assert "4 hit" in out
+    assert "0 miss" in out
+    assert "first divergence: none" in out
+    # Should show trace lines
+    assert "block   0" in out
+    assert "HIT" in out
+
+
+def test_explain_prints_divergence_context_for_a_miss_request(tmp_path, capsys):
+    corpus = _write_chen_like_corpus(tmp_path)
+    exit_code = main([
+        "explain", str(corpus),
+        "--request-id", "widgets-1",
+        "--block-size", "16",
+        "--capacity-blocks", "100",
+    ])
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "widgets-1" in out
+    assert "first divergence: block 0" in out
+    assert "MISS" in out
+    # Aggregate context should show the tenant=widgets story
+    assert "divergence context" in out
+    assert "widgets" in out
+
+
+def test_explain_returns_nonzero_on_unknown_request_id(tmp_path, capsys):
+    corpus = _write_chen_like_corpus(tmp_path)
+    exit_code = main([
+        "explain", str(corpus),
+        "--request-id", "does-not-exist",
+        "--block-size", "16",
+        "--capacity-blocks", "100",
+    ])
+
+    assert exit_code == 2
+    err = capsys.readouterr().err
+    assert "not found" in err
+    assert "does-not-exist" in err
+
+
+def test_explain_json_flag_emits_parseable_result(tmp_path, capsys):
+    corpus = _write_chen_like_corpus(tmp_path)
+    exit_code = main([
+        "explain", str(corpus),
+        "--request-id", "widgets-0",
+        "--block-size", "16",
+        "--capacity-blocks", "100",
+        "--json",
+    ])
+
+    assert exit_code == 0
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["request_id"] == "widgets-0"
+    assert parsed["first_divergent_block"] == 0
+    assert parsed["total_prompt_blocks"] == 4
+    assert parsed["cached_prefix_blocks"] == 0
+    assert len(parsed["block_traces"]) == 4
+    assert all(t["verdict"] == "MISS" for t in parsed["block_traces"])
+    # JSON should carry full 16-token blocks, not truncated
+    assert len(parsed["block_traces"][0]["tokens"]) == 16
+
+
+def test_explain_truncates_long_blocks_in_human_output(tmp_path, capsys):
+    corpus = _write_chen_like_corpus(tmp_path)
+    exit_code = main([
+        "explain", str(corpus),
+        "--request-id", "acme-0",
+        "--block-size", "16",
+        "--capacity-blocks", "100",
+    ])
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    # Truncation uses U+2026 (…) between head and tail
+    assert "…" in out
+
+
 def test_end_to_end_cli_prints_divergence_on_chen_scenario(tmp_path, capsys):
     """The bundled example should surface the UUID diagnosis in one command."""
     corpus = tmp_path / "chen.jsonl"

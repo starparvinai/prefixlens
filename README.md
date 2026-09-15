@@ -63,6 +63,31 @@ The bundled `examples/chen_multitenant.jsonl` reproduces this in 10 requests, on
 
 Corpora with a `"prompt"` field instead of `"token_ids"` need a tokenizer — the v0.1 CLI has no `--tokenizer` flag, so pre-tokenize your corpus. See `src/prefixlens/loader.py` for the library API.
 
+### `prefixlens explain` — per-request diagnosis
+
+When someone gets paged with *"request `req_abc123` was slow, why?"*:
+
+```bash
+$ prefixlens explain traces.jsonl --request-id req_abc123 --block-size 16 --capacity-blocks 4096
+
+prefixlens explain — req_abc123
+
+  tags:    tenant=widgets, route=/v1/chat/completions
+  blocks:  0 hit, 4 miss, 4 total
+  first divergence: block 0
+
+  block-by-block trace:
+    block   0  MISS  [9000002, 2000, 2001, 2002, …, 2012, 2013, 2014]
+    block   1  MISS  [2015, 2016, 2017, 2018, …, 2028, 2029, 2030]
+    block   2  MISS  [2031, 2032, 2033, 2034, …, 2044, 2045, 2046]
+    block   3  MISS  [2047, 2048, 2049, 2050, …, 2060, 2061, 2062]
+
+  divergence context (aggregate signal at this position):
+    tenant=widgets: 5 miss at block 0 (100.0% unique)
+```
+
+Two views bolted together: the per-request block-by-block trace *and* the aggregate signal for the request's tag buckets at that same position. So the reader knows both "your request diverged at block 0" *and* "you're one of 5 widgets requests with the exact same shape — this is systemic, not a one-off." Add `--json` for scripting.
+
 ### `prefixlens validate` — the credibility anchor
 
 Everything above is trustworthy only if our CPU sim agrees with what real vLLM would do on the same request stream. `validate` is that check:
@@ -123,6 +148,6 @@ Multi-tenant workload observability is a solved craft in backend systems and a w
 
 ## Status
 
-**v0.0.x in progress.** Radix simulator + LRU eviction + JSONL loader + per-tag aggregation + divergent-position attribution + `prefixlens analyze` + `prefixlens validate` (top-line hit-rate parity against a live vLLM `/metrics` scrape) are all in and tested (100+ tests). The Chen scenario reproduces in one command against a bundled fixture. Next up: text-space substring mining and reordering-suggestion projections.
+**v0.0.x in progress.** Radix simulator + LRU eviction + JSONL loader + per-tag aggregation + divergent-position attribution + `prefixlens analyze` + `prefixlens validate` + `prefixlens explain` (per-request block-by-block trace + aggregate divergence context) are all in and tested (115+ tests). The Chen scenario reproduces in one command against a bundled fixture. Next up: `prefixlens lint` (CI-friendly prompt-template hazard check) and text-space substring mining.
 
 If this problem is one you also have, or if you've solved it a different way, open an issue. Real workload traces (anonymized) welcome.

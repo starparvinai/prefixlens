@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
+from prefixlens.explain import RequestExplanation, explain_request
 from prefixlens.loader import load_jsonl
 from prefixlens.metrics import parse_vllm_metrics
 from prefixlens.simulator import RadixCacheSimulator, Report
@@ -113,6 +114,44 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Emit the comparison as JSON on stdout instead of the "
         "human-readable summary.",
+    )
+
+    explain_cmd = subparsers.add_parser(
+        "explain",
+        help="Block-by-block trace of one request through the simulated cache.",
+        description="Per-request diagnostic. Reads the whole corpus (needed to "
+        "warm the cache to the same state the target request saw), then prints "
+        "a block-by-block HIT/MISS trace for the target request and the "
+        "aggregate-divergence context for its tag buckets. Answers 'why did "
+        "req_abc123 miss?' in one command.",
+    )
+    explain_cmd.add_argument(
+        "corpus",
+        type=Path,
+        help="JSONL corpus containing the target request.",
+    )
+    explain_cmd.add_argument(
+        "--request-id",
+        required=True,
+        help="request_id of the request to explain (must appear in the corpus).",
+    )
+    explain_cmd.add_argument(
+        "--block-size",
+        type=int,
+        default=16,
+        help="Block size in tokens (default: 16, matching vLLM).",
+    )
+    explain_cmd.add_argument(
+        "--capacity-blocks",
+        type=int,
+        default=4096,
+        help="Cache capacity in blocks (default: 4096).",
+    )
+    explain_cmd.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit the explanation as JSON on stdout instead of the "
+        "human-readable trace.",
     )
 
     return parser
@@ -300,6 +339,78 @@ def _run_validate(args: argparse.Namespace) -> int:
     return 0 if verdict == "OK" else 1
 
 
+def _format_block_tokens_truncated(tokens: tuple[int, ...]) -> str:
+    """Truncate a 16-token block for human-readable display.
+
+    Shows first 4 + last 4 with an ellipsis in between; blocks smaller than
+    that render in full. Full arrays are still emitted through --json.
+    """
+    if len(tokens) <= 8:
+        return "[" + ", ".join(str(t) for t in tokens) + "]"
+    head = ", ".join(str(t) for t in tokens[:4])
+    tail = ", ".join(str(t) for t in tokens[-4:])
+    return f"[{head}, …, {tail}]"
+
+
+def _render_explain_human(exp: RequestExplanation) -> str:
+    lines: list[str] = []
+    tag_str = ", ".join(f"{k}={v}" for k, v in exp.tags) if exp.tags else "(no tags)"
+    lines.append(f"prefixlens explain — {exp.request_id}")
+    lines.append("")
+    lines.append(f"  tags:    {tag_str}")
+    lines.append(f"  blocks:  {exp.cached_prefix_blocks} hit, "
+                 f"{exp.total_prompt_blocks - exp.cached_prefix_blocks} miss, "
+                 f"{exp.total_prompt_blocks} total")
+    if exp.first_divergent_block is not None:
+        lines.append(f"  first divergence: block {exp.first_divergent_block}")
+    else:
+        lines.append("  first divergence: none (full hit or empty prompt)")
+
+    if exp.block_traces:
+        lines.append("")
+        lines.append("  block-by-block trace:")
+        for t in exp.block_traces:
+            lines.append(
+                f"    block {t.position:>3}  {t.verdict:<4}  "
+                f"{_format_block_tokens_truncated(t.tokens)}"
+            )
+
+    if exp.divergence_context:
+        lines.append("")
+        lines.append("  divergence context (aggregate signal at this position):")
+        for ctx in exp.divergence_context:
+            lines.append(
+                f"    {ctx.tag_key}={ctx.tag_value}: "
+                f"{ctx.position.miss_count:,} miss at block {ctx.position.block_position} "
+                f"({ctx.position.unique_content_ratio * 100:5.1f}% unique)"
+            )
+    return "\n".join(lines)
+
+
+def _run_explain(args: argparse.Namespace) -> int:
+    sim = RadixCacheSimulator(
+        block_size=args.block_size,
+        capacity_blocks=args.capacity_blocks,
+    )
+    for req in load_jsonl(args.corpus):
+        sim.process(req)
+    report = sim.report()
+
+    exp = explain_request(sim, args.request_id, report)
+    if exp is None:
+        print(
+            f"prefixlens explain: request_id {args.request_id!r} not found in corpus",
+            file=sys.stderr,
+        )
+        return 2
+
+    if args.json:
+        print(json.dumps(dataclasses.asdict(exp), indent=2))
+    else:
+        print(_render_explain_human(exp))
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -308,6 +419,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_analyze(args)
     if args.command == "validate":
         return _run_validate(args)
+    if args.command == "explain":
+        return _run_explain(args)
     # required=True on subparsers means argparse already errored; unreachable.
     parser.error(f"unknown command: {args.command}")
     return 2  # pragma: no cover
