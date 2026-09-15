@@ -1,5 +1,33 @@
 # Design notes
 
+## Validate mode: what we're differentially testing, and why the top-line hit rate is enough
+
+`prefixlens validate` compares one number — the aggregate prefix-cache hit rate — between our CPU sim and a real vLLM `/metrics` scrape taken after the same request stream ran on both. It's a differential test in the same sense a JIT is differentially tested against its interpreter or a new consensus implementation against a reference: the sim IS a reimplementation of vLLM's block-manager behavior, and if it can't reproduce the single most-aggregate output, the finer-grained outputs (per-tenant, per-position) are almost certainly wrong too.
+
+**Why one number is enough for v0.1.**
+
+The per-tenant, per-position, and per-request breakdowns all derive from the same simulation state — they're views over the identical set of `process()` decisions the sim already made. If the aggregate hit rate matches, the shared underlying decisions match. If the aggregate diverges, chasing which specific view diverged is a waste; the substrate is off, and no view is trustworthy.
+
+Later modes (block-lifetime histograms, eviction rate) diagnose *which kind* of divergence when the aggregate disagrees — they answer "we're off by 5pp; is it the eviction policy, the hash function, or the request order?" But that's post-diagnosis. The top-line check is the go/no-go gate that determines whether any of the finer questions are worth asking.
+
+**Why we compare against `/metrics`, not per-request state.**
+
+vLLM exposes prefix-cache activity as two Prometheus counters — `vllm:prefix_cache_hits` and `vllm:prefix_cache_queries` — and no per-request hit/miss decision. That gap is exactly the one `prefixlens` is built to close: the engine can't tell you *which* requests missed. But it means our ground-truth reference is aggregate-only. So we compare aggregate-to-aggregate.
+
+**The load-bearing constraints for the check to be meaningful:**
+
+1. **`--block-size` and `--capacity-blocks` must match the real engine.** vLLM defaults to 16-token blocks; capacity is set from GPU memory config and varies. A wrong config produces a false DIVERGED verdict. Most user-side mistake we expect to see, so the "verdict: DIVERGED" output prints this as the first troubleshooting hint.
+2. **The request log must be the exact stream, in order.** Skipped or reordered requests desync the sim's cache from real. vLLM's `--request-logging` gives this directly.
+3. **The `/metrics` snapshot must be taken *after* the workload finishes.** Counters are monotonic totals; a snapshot taken during the workload measures partial state.
+
+**Trust score.** Absolute difference in hit rate, in percentage points. Verdict is `OK` if `≤ tolerance-pp` (default 3.0 per SPEC §8), else `DIVERGED`. Exit code 0 on OK, 1 on DIVERGED — scripts and CI can use this directly.
+
+**What we DON'T validate.**
+
+- Semantic correctness of substring mining (structural, not sim-vs-engine).
+- Divergent-position histograms — the sim IS the source of truth; vLLM exposes no comparable data.
+- Per-request behavior — see above; this is the gap prefixlens fills, so being unable to check it is *the design*, not an oversight.
+
 ## Divergent-position attribution: the two diagnoses that share one symptom
 
 The load-bearing idea behind cache-killer attribution is that **the same first-divergent-block position can mean two very different things**, with opposite fixes.

@@ -299,6 +299,142 @@ def test_human_render_limits_to_top_three_positions():
     assert "block   4" not in out
 
 
+# ---- validate subcommand -------------------------------------------------
+
+
+def _make_matching_metrics(hits: int, queries: int) -> str:
+    return (
+        f"vllm:prefix_cache_hits {hits}\n"
+        f"vllm:prefix_cache_queries {queries}\n"
+    )
+
+
+def test_validate_reports_OK_when_sim_matches_real(tmp_path, capsys):
+    # Two identical 2-block requests. Sim: r1 = 0/2, r2 = 2/2, overall 2/4 = 50%.
+    # Hand-craft matching metrics.
+    corpus = _write_corpus(
+        tmp_path,
+        [
+            {"token_ids": list(range(32))},
+            {"token_ids": list(range(32))},
+        ],
+    )
+    metrics = tmp_path / "metrics.txt"
+    metrics.write_text(_make_matching_metrics(hits=2, queries=4), encoding="utf-8")
+
+    exit_code = main([
+        "validate", str(corpus),
+        "--metrics-file", str(metrics),
+        "--block-size", "16",
+        "--capacity-blocks", "100",
+    ])
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "verdict: OK" in out
+    assert "sim is calibrated" in out.lower()
+
+
+def test_validate_reports_DIVERGED_when_delta_exceeds_tolerance(tmp_path, capsys):
+    # Sim will produce 50% hit rate; give real a very different one.
+    corpus = _write_corpus(
+        tmp_path,
+        [
+            {"token_ids": list(range(32))},
+            {"token_ids": list(range(32))},
+        ],
+    )
+    metrics = tmp_path / "metrics.txt"
+    # real hit rate = 90%, sim = 50%, delta = 40pp >> tolerance
+    metrics.write_text(_make_matching_metrics(hits=90, queries=100), encoding="utf-8")
+
+    exit_code = main([
+        "validate", str(corpus),
+        "--metrics-file", str(metrics),
+        "--block-size", "16",
+        "--capacity-blocks", "100",
+    ])
+
+    assert exit_code == 1  # nonzero exit signals disagreement for scripts
+    out = capsys.readouterr().out
+    assert "verdict: DIVERGED" in out
+    # Should print troubleshooting hints
+    assert "block-size" in out
+
+
+def test_validate_tolerance_flag_controls_verdict(tmp_path, capsys):
+    # Sim = 50%, real = 55%, delta = 5pp.
+    # Default tolerance 3pp → DIVERGED. Raise to 10pp → OK.
+    corpus = _write_corpus(
+        tmp_path,
+        [
+            {"token_ids": list(range(32))},
+            {"token_ids": list(range(32))},
+        ],
+    )
+    metrics = tmp_path / "metrics.txt"
+    metrics.write_text(_make_matching_metrics(hits=55, queries=100), encoding="utf-8")
+
+    exit_code = main([
+        "validate", str(corpus),
+        "--metrics-file", str(metrics),
+        "--block-size", "16",
+        "--capacity-blocks", "100",
+        "--tolerance-pp", "10",
+    ])
+
+    assert exit_code == 0
+    assert "verdict: OK" in capsys.readouterr().out
+
+
+def test_validate_json_flag_emits_parseable_result(tmp_path, capsys):
+    corpus = _write_corpus(tmp_path, [{"token_ids": list(range(32))}])
+    metrics = tmp_path / "metrics.txt"
+    metrics.write_text(_make_matching_metrics(hits=0, queries=2), encoding="utf-8")
+
+    exit_code = main([
+        "validate", str(corpus),
+        "--metrics-file", str(metrics),
+        "--block-size", "16",
+        "--capacity-blocks", "100",
+        "--json",
+    ])
+
+    assert exit_code == 0
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["verdict"] == "OK"
+    assert parsed["sim_hit_rate"] == 0.0
+    assert parsed["real_hit_rate"] == 0.0
+    assert parsed["real_prefix_cache_hits"] == 0
+    assert parsed["real_prefix_cache_queries"] == 2
+    assert parsed["delta_pp"] == 0.0
+
+
+def test_validate_requires_capacity_blocks(tmp_path):
+    # --capacity-blocks is required by design (no sensible default).
+    corpus = _write_corpus(tmp_path, [{"token_ids": [1]}])
+    metrics = tmp_path / "metrics.txt"
+    metrics.write_text("vllm:prefix_cache_hits 0\nvllm:prefix_cache_queries 0\n")
+
+    with pytest.raises(SystemExit) as exc:
+        main(["validate", str(corpus), "--metrics-file", str(metrics)])
+    assert exc.value.code == 2
+
+
+def test_validate_surfaces_metrics_parse_error(tmp_path):
+    corpus = _write_corpus(tmp_path, [{"token_ids": list(range(32))}])
+    metrics = tmp_path / "empty.txt"
+    metrics.write_text("# just comments\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="not found"):
+        main([
+            "validate", str(corpus),
+            "--metrics-file", str(metrics),
+            "--block-size", "16",
+            "--capacity-blocks", "100",
+        ])
+
+
 def test_end_to_end_cli_prints_divergence_on_chen_scenario(tmp_path, capsys):
     """The bundled example should surface the UUID diagnosis in one command."""
     corpus = tmp_path / "chen.jsonl"

@@ -1,4 +1,5 @@
 from prefixlens.loader import Tokenizer, load_jsonl
+from prefixlens.metrics import VllmMetrics, parse_vllm_metrics
 from prefixlens.request import Request
 from prefixlens.simulator import (
     DivergentPosition,
@@ -16,5 +17,7 @@ __all__ = [
     "Request",
     "TagStats",
     "Tokenizer",
+    "VllmMetrics",
     "load_jsonl",
+    "parse_vllm_metrics",
 ]

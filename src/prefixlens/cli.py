@@ -1,8 +1,9 @@
 """Command-line entry point for prefixlens.
 
-The `prefixlens` command dispatches to subcommands. In v0.1 there is only
-one — `analyze` — but the subparser scaffold is in place so `validate` and
-`lint` (SPEC §4) can be added without restructuring.
+The `prefixlens` command dispatches to subcommands: `analyze` produces a
+report from a corpus, and `validate` checks whether the sim's top-line hit
+rate matches what a real vLLM engine reported for the same request stream —
+the credibility anchor per SPEC §8. `lint` and `explain` are v0.2+.
 """
 
 from __future__ import annotations
@@ -15,7 +16,13 @@ from pathlib import Path
 from typing import Sequence
 
 from prefixlens.loader import load_jsonl
+from prefixlens.metrics import parse_vllm_metrics
 from prefixlens.simulator import RadixCacheSimulator, Report
+
+
+# vs-real tolerance for the "trust score" verdict, in percentage points of
+# absolute hit-rate difference. SPEC §8 target: within ±3pp.
+DEFAULT_TRUST_TOLERANCE_PP = 3.0
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -54,6 +61,60 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Emit the report as JSON on stdout instead of the human-readable "
         "summary. Suitable for piping into jq or downstream tooling.",
     )
+
+    validate = subparsers.add_parser(
+        "validate",
+        help="Compare simulated hit rate against a real vLLM /metrics scrape.",
+        description="Differential check: run the same request stream through "
+        "the sim and compare the top-line prefix-cache hit rate against what "
+        "vLLM reported in its /metrics. Verdicts OK (within tolerance) or "
+        "DIVERGED. This is the credibility anchor: if this passes, downstream "
+        "attribution can be trusted; if it fails, the sim or the config is "
+        "wrong before anything else.",
+    )
+    validate.add_argument(
+        "corpus",
+        type=Path,
+        help="Path to the JSONL corpus of the requests actually sent to vLLM. "
+        "Order and completeness matter — a skipped request drifts sim state.",
+    )
+    validate.add_argument(
+        "--metrics-file",
+        type=Path,
+        required=True,
+        help="Path to a text file containing a vLLM /metrics scrape "
+        "(e.g. `curl http://vllm:8000/metrics > metrics.txt`) taken AFTER "
+        "the workload completed.",
+    )
+    validate.add_argument(
+        "--block-size",
+        type=int,
+        default=16,
+        help="Block size in tokens. MUST match the engine's real config or "
+        "the comparison is meaningless. Default: 16 (vLLM default).",
+    )
+    validate.add_argument(
+        "--capacity-blocks",
+        type=int,
+        required=True,
+        help="Cache capacity in blocks on the real engine. Required — no "
+        "sensible default (depends on GPU memory and model config).",
+    )
+    validate.add_argument(
+        "--tolerance-pp",
+        type=float,
+        default=DEFAULT_TRUST_TOLERANCE_PP,
+        help=f"Absolute hit-rate difference (in percentage points) below which "
+        f"the sim is considered calibrated. Default: {DEFAULT_TRUST_TOLERANCE_PP}. "
+        "SPEC §8 target.",
+    )
+    validate.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit the comparison as JSON on stdout instead of the "
+        "human-readable summary.",
+    )
+
     return parser
 
 
@@ -164,12 +225,89 @@ def _run_analyze(args: argparse.Namespace) -> int:
     return 0
 
 
+def _render_validate_human(
+    sim_hit_rate: float,
+    sim_total_blocks: int,
+    real_hits: int,
+    real_queries: int,
+    real_hit_rate: float,
+    delta_pp: float,
+    tolerance_pp: float,
+    verdict: str,
+) -> str:
+    lines = [
+        "prefixlens validate — sim vs real vLLM /metrics",
+        "",
+        f"  sim hit rate:   {sim_hit_rate * 100:5.1f}%   ({sim_total_blocks:,} blocks processed)",
+        f"  real hit rate:  {real_hit_rate * 100:5.1f}%   "
+        f"({real_hits:,} hits / {real_queries:,} queries)",
+        f"  delta:          {delta_pp:5.2f} pp   (tolerance ±{tolerance_pp:.1f} pp)",
+        "",
+        f"  verdict: {verdict}",
+    ]
+    if verdict == "OK":
+        lines.append("           Sim is calibrated on this workload; downstream")
+        lines.append("           attribution is trustworthy.")
+    else:
+        lines.append("           Sim and engine disagree beyond tolerance. Check:")
+        lines.append("           - --block-size and --capacity-blocks match the real engine")
+        lines.append("           - the request log is complete and in order")
+        lines.append("           - the /metrics scrape was taken AFTER the workload finished")
+    return "\n".join(lines)
+
+
+def _run_validate(args: argparse.Namespace) -> int:
+    metrics_text = args.metrics_file.read_text(encoding="utf-8")
+    real = parse_vllm_metrics(metrics_text)
+
+    sim = RadixCacheSimulator(
+        block_size=args.block_size,
+        capacity_blocks=args.capacity_blocks,
+    )
+    for req in load_jsonl(args.corpus):
+        sim.process(req)
+    sim_report = sim.report()
+
+    delta_pp = abs(sim_report.hit_rate - real.hit_rate) * 100
+    verdict = "OK" if delta_pp <= args.tolerance_pp else "DIVERGED"
+
+    if args.json:
+        result = {
+            "sim_hit_rate": sim_report.hit_rate,
+            "sim_total_blocks": sim_report.total_blocks,
+            "real_hit_rate": real.hit_rate,
+            "real_prefix_cache_hits": real.prefix_cache_hits,
+            "real_prefix_cache_queries": real.prefix_cache_queries,
+            "delta_pp": delta_pp,
+            "tolerance_pp": args.tolerance_pp,
+            "verdict": verdict,
+        }
+        print(json.dumps(result, indent=2))
+    else:
+        print(_render_validate_human(
+            sim_hit_rate=sim_report.hit_rate,
+            sim_total_blocks=sim_report.total_blocks,
+            real_hits=real.prefix_cache_hits,
+            real_queries=real.prefix_cache_queries,
+            real_hit_rate=real.hit_rate,
+            delta_pp=delta_pp,
+            tolerance_pp=args.tolerance_pp,
+            verdict=verdict,
+        ))
+
+    # Exit code communicates the verdict for scripting: 0 = OK, 1 = DIVERGED.
+    # Not a fatal error (the tool ran fine), just a signal.
+    return 0 if verdict == "OK" else 1
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
     if args.command == "analyze":
         return _run_analyze(args)
+    if args.command == "validate":
+        return _run_validate(args)
     # required=True on subparsers means argparse already errored; unreachable.
     parser.error(f"unknown command: {args.command}")
     return 2  # pragma: no cover

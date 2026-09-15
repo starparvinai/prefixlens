@@ -63,6 +63,30 @@ The bundled `examples/chen_multitenant.jsonl` reproduces this in 10 requests, on
 
 Corpora with a `"prompt"` field instead of `"token_ids"` need a tokenizer — the v0.1 CLI has no `--tokenizer` flag, so pre-tokenize your corpus. See `src/prefixlens/loader.py` for the library API.
 
+### `prefixlens validate` — the credibility anchor
+
+Everything above is trustworthy only if our CPU sim agrees with what real vLLM would do on the same request stream. `validate` is that check:
+
+```bash
+$ curl http://vllm:8000/metrics > metrics.txt   # after your workload runs
+$ prefixlens validate requests.jsonl \
+    --metrics-file metrics.txt \
+    --block-size 16 \
+    --capacity-blocks 4096
+
+prefixlens validate — sim vs real vLLM /metrics
+
+  sim hit rate:    42.1%   (8,412 blocks processed)
+  real hit rate:   43.7%   (3,678 hits / 8,412 queries)
+  delta:           1.60 pp   (tolerance ±3.0 pp)
+
+  verdict: OK
+           Sim is calibrated on this workload; downstream
+           attribution is trustworthy.
+```
+
+Exit code 0 if `OK`, 1 if `DIVERGED` (useful in CI). `--block-size` and `--capacity-blocks` must match the real engine's config; a wrong config is the most common source of false-diverge. Add `--tolerance-pp N` to widen the threshold, or `--json` for machine output.
+
 ## What it is not
 
 - Not a GPU profiler. Doesn't measure kernel time. If your bottleneck is compute, not cache, this won't help.
@@ -99,6 +123,6 @@ Multi-tenant workload observability is a solved craft in backend systems and a w
 
 ## Status
 
-**v0.0.x in progress.** Radix simulator + LRU eviction + JSONL loader + per-tag aggregation + divergent-position attribution + `prefixlens analyze` CLI are all in and tested (80+ tests). The Chen scenario reproduces in one command against a bundled fixture, complete with the UUID-vs-thrashing diagnosis. Next up: text-space substring mining and `validate` mode against a live vLLM.
+**v0.0.x in progress.** Radix simulator + LRU eviction + JSONL loader + per-tag aggregation + divergent-position attribution + `prefixlens analyze` + `prefixlens validate` (top-line hit-rate parity against a live vLLM `/metrics` scrape) are all in and tested (100+ tests). The Chen scenario reproduces in one command against a bundled fixture. Next up: text-space substring mining and reordering-suggestion projections.
 
 If this problem is one you also have, or if you've solved it a different way, open an issue. Real workload traces (anonymized) welcome.
