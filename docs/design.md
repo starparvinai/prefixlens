@@ -1,5 +1,17 @@
 # Design notes
 
+## The JSONL loader boundary
+
+The loader is where an on-disk trace becomes an in-memory `Request` stream. Three design decisions worth remembering:
+
+**Bring-your-own tokenizer.** `load_jsonl` takes a `Callable[[str], Sequence[int]]` and calls it only when needed. There is no bundled tokenizer, no soft dependency on `tiktoken` or `transformers`. This keeps `pip install prefixlens` small and lets callers use whatever tokenizer they already send to the engine — guaranteeing the analysis matches what the engine actually saw. A corpus with `token_ids` already present skips the tokenizer entirely (the fast, exact-match path).
+
+**Streaming, not load-all.** The loader is a generator. A 10K-prompt fixture fits in memory; a 10M-line production trace does not. Everything downstream (the simulator's `process()` loop, future aggregation, the CLI) consumes iterators, so nothing forces the corpus into RAM. Callers that want a list just wrap `list(...)`.
+
+**Fail loud with line numbers, don't skip silently.** Malformed JSON, non-integer `token_ids`, missing required fields — all raise `ValueError` naming the offending line. This is a developer-facing tool; a silent skip masks corpus bugs that produce a wrong report, which is worse than any crash. A `--skip-invalid` mode is a plausible v0.2, but adding it before we know the failure shape would be premature.
+
+Tag flattening is the last small thing: top-level `tenant`/`route`/`model` and any nested `tags: {...}` merge into a single sorted `(key, value)` tuple on the `Request`. Downstream aggregation sees one namespace, not two. Nested overrides top-level on collision (last-write-wins).
+
 ## The "radix tree" naming
 
 `prefixlens` calls its core data structure a **radix cache** and its class `RadixTree` because that is the term the LLM-serving community uses (SGLang's "RadixAttention," vLLM's "radix cache" internals, LMCache's docs). Strictly, a radix tree is a **path-compressed trie** — chains of single-child nodes collapse into one edge labeled with the sequence of keys along that chain.
