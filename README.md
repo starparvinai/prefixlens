@@ -35,28 +35,25 @@ Everything runs on CPU. No GPU required.
 ## Usage
 
 ```bash
-# Analyze a trace of prompts
-$ prefixlens analyze traces.jsonl --tokenizer meta-llama/Llama-3-8B
+$ pip install -e .
+$ prefixlens analyze examples/chen_multitenant.jsonl --block-size 16 --capacity-blocks 100
 
-Cache hit rate: 34.2%
-By tag:
-  tenant=acme      68.1%    (12,433 requests)
-  tenant=widgets    0.3%    (8,912 requests)
+prefixlens analyze — 10 requests, 40 blocks total
 
-Top divergent positions (tenant=widgets):
-  position 47:  6,204 requests   ← 69% of misses
-  position 92:  1,880 requests
-  position 118:   612 requests
+  overall hit rate:  40.0%  (16 / 40 blocks)
 
-Top cache-killer substrings (tenant=widgets):
-  1. "session_id: <uuid>"        appears at pos 41-58 in 6,204 requests
-  2. "generated_at: <iso8601>"   appears at pos 88-104 in 1,880 requests
-
-Suggestion:
-  Moving `session_id` and `generated_at` fields from the system prompt
-  into the user message would eliminate the top two divergent positions
-  for tenant=widgets. Rerun to measure the actual hit-rate lift.
+  by route:
+    /v1/chat/completions   40.0%  (10 req, 16/40 blk)
+  by tenant:
+    acme      80.0%  (5 req, 16/20 blk)
+    widgets    0.0%  (5 req, 0/20 blk)
 ```
+
+The overall 40% is exactly what vLLM's `/metrics` gives you — and exactly what obscured the real story in Chen's post. The per-tenant breakdown surfaces it: `acme` is fine, `widgets` is fully broken. The bundled `examples/chen_multitenant.jsonl` reproduces this in 10 requests, on CPU, in milliseconds. Add `--json` for machine-readable output.
+
+**Coming next (see [Roadmap](#roadmap))**: divergent-position histogram and cache-killer substring mining — the "*where* in the prompt is it breaking, and *what* substring is responsible" layer. Those upgrade the per-tenant table with per-position-in-prompt attribution and a top-N ranking of offending substrings, closing the loop from "widgets is 0%" to "move `session_id` from position 47 into the user message."
+
+Corpora with a `"prompt"` field instead of `"token_ids"` need a tokenizer — the v0.1 CLI has no `--tokenizer` flag, so pre-tokenize your corpus. See `src/prefixlens/loader.py` for the library API.
 
 ## What it is not
 
@@ -94,6 +91,6 @@ Multi-tenant workload observability is a solved craft in backend systems and a w
 
 ## Status
 
-**Spec, not built yet.** README-first — this document is the contract; the code will follow.
+**v0.0.x in progress.** Radix simulator + LRU eviction + JSONL loader + per-tag aggregation + `prefixlens analyze` CLI are all in and tested (60+ tests). The Chen scenario reproduces in one command against a bundled fixture. Next up: divergent-position histogram and cache-killer substring mining.
 
 If this problem is one you also have, or if you've solved it a different way, open an issue. Real workload traces (anonymized) welcome.
