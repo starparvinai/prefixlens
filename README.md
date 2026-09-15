@@ -42,16 +42,24 @@ prefixlens analyze — 10 requests, 40 blocks total
 
   overall hit rate:  40.0%  (16 / 40 blocks)
 
-  by route:
-    /v1/chat/completions   40.0%  (10 req, 16/40 blk)
   by tenant:
     acme      80.0%  (5 req, 16/20 blk)
     widgets    0.0%  (5 req, 0/20 blk)
+
+  divergent positions for tenant=widgets:
+    block   0      5 miss  (100.0% unique — unique content per request)
 ```
 
-The overall 40% is exactly what vLLM's `/metrics` gives you — and exactly what obscured the real story in Chen's post. The per-tenant breakdown surfaces it: `acme` is fine, `widgets` is fully broken. The bundled `examples/chen_multitenant.jsonl` reproduces this in 10 requests, on CPU, in milliseconds. Add `--json` for machine-readable output.
+Read that bottom line the way an operator would: *every widgets request first-misses at block 0, and the token content at block 0 is different every time.* Diagnosis: something at the top of the prompt is per-request-unique — the classic session-UUID-at-position-0 shape. Restructure to move it into the user message, not the system prompt.
 
-**Coming next (see [Roadmap](#roadmap))**: divergent-position histogram and cache-killer substring mining — the "*where* in the prompt is it breaking, and *what* substring is responsible" layer. Those upgrade the per-tenant table with per-position-in-prompt attribution and a top-N ranking of offending substrings, closing the loop from "widgets is 0%" to "move `session_id` from position 47 into the user message."
+The overall 40% is exactly what vLLM's `/metrics` gives you — and exactly what obscured the real story in Chen's post. `prefixlens` pulls the tenants apart, and then within `widgets` locates *where* and *what kind* of divergence you're looking at:
+
+- **`100% unique content per request`** — variable field (UUID, timestamp, request ID) at that block. Fix: restructure the prompt.
+- **`shared content, thrashing`** — same tokens repeatedly missed. Fix: grow the cache; the working set is bigger than capacity.
+
+The bundled `examples/chen_multitenant.jsonl` reproduces this in 10 requests, on CPU, in milliseconds. Add `--json` for machine-readable output.
+
+**Coming next (see [Roadmap](#roadmap))**: text-space substring mining once the tokenizer path is wired up — turns "block 0 is unique per request" into `"session_id=<uuid>"`, plus reordering suggestions that project the hit-rate lift of each proposed fix.
 
 Corpora with a `"prompt"` field instead of `"token_ids"` need a tokenizer — the v0.1 CLI has no `--tokenizer` flag, so pre-tokenize your corpus. See `src/prefixlens/loader.py` for the library API.
 
@@ -91,6 +99,6 @@ Multi-tenant workload observability is a solved craft in backend systems and a w
 
 ## Status
 
-**v0.0.x in progress.** Radix simulator + LRU eviction + JSONL loader + per-tag aggregation + `prefixlens analyze` CLI are all in and tested (60+ tests). The Chen scenario reproduces in one command against a bundled fixture. Next up: divergent-position histogram and cache-killer substring mining.
+**v0.0.x in progress.** Radix simulator + LRU eviction + JSONL loader + per-tag aggregation + divergent-position attribution + `prefixlens analyze` CLI are all in and tested (80+ tests). The Chen scenario reproduces in one command against a bundled fixture, complete with the UUID-vs-thrashing diagnosis. Next up: text-space substring mining and `validate` mode against a live vLLM.
 
 If this problem is one you also have, or if you've solved it a different way, open an issue. Real workload traces (anonymized) welcome.

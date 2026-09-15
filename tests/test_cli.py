@@ -13,7 +13,7 @@ import json
 import pytest
 
 from prefixlens.cli import _render_report_human, _report_to_json, main
-from prefixlens.simulator import Report, TagStats
+from prefixlens.simulator import DivergentPosition, Report, TagStats
 
 
 # ---- pure render layer ---------------------------------------------------
@@ -190,3 +190,139 @@ def test_missing_subcommand_exits_nonzero(capsys):
     with pytest.raises(SystemExit) as exc:
         main([])
     assert exc.value.code == 2
+
+
+# ---- divergence rendering ------------------------------------------------
+
+
+def test_human_render_includes_divergence_section_when_present():
+    # A UUID-shaped bucket: high unique_content_ratio.
+    report = Report(
+        hit_rate=0.0,
+        total_requests=5,
+        cached_blocks=0,
+        total_blocks=20,
+        by_tag={
+            "tenant": {
+                "widgets": TagStats(hit_rate=0.0, total_requests=5, cached_blocks=0, total_blocks=20)
+            }
+        },
+        by_tag_divergence={
+            "tenant": {
+                "widgets": (
+                    DivergentPosition(block_position=0, miss_count=5, unique_content_ratio=1.0),
+                )
+            }
+        },
+    )
+
+    out = _render_report_human(report)
+
+    assert "divergent positions for tenant=widgets" in out
+    assert "block   0" in out
+    assert "5 miss" in out
+    assert "unique content per request" in out
+
+
+def test_human_render_labels_thrashing_bucket_differently():
+    # Low unique_content_ratio → shared-content / thrashing diagnosis.
+    report = Report(
+        hit_rate=0.0,
+        total_requests=6,
+        cached_blocks=0,
+        total_blocks=6,
+        by_tag={
+            "tenant": {
+                "thrash": TagStats(hit_rate=0.0, total_requests=6, cached_blocks=0, total_blocks=6)
+            }
+        },
+        by_tag_divergence={
+            "tenant": {
+                "thrash": (
+                    DivergentPosition(block_position=0, miss_count=6, unique_content_ratio=0.2),
+                )
+            }
+        },
+    )
+
+    out = _render_report_human(report)
+
+    assert "shared content, thrashing" in out
+    assert "unique content per request" not in out
+
+
+def test_human_render_omits_divergence_for_all_hit_buckets():
+    # by_tag_divergence has an entry but it's empty (all hits) → no section rendered.
+    report = Report(
+        hit_rate=1.0,
+        total_requests=5,
+        cached_blocks=20,
+        total_blocks=20,
+        by_tag={
+            "tenant": {
+                "acme": TagStats(hit_rate=1.0, total_requests=5, cached_blocks=20, total_blocks=20)
+            }
+        },
+        by_tag_divergence={"tenant": {"acme": ()}},
+    )
+
+    out = _render_report_human(report)
+
+    assert "divergent positions" not in out
+
+
+def test_human_render_limits_to_top_three_positions():
+    # Five positions in the bucket; only the top 3 (by miss count) should render.
+    positions = tuple(
+        DivergentPosition(block_position=i, miss_count=100 - i, unique_content_ratio=1.0)
+        for i in range(5)
+    )
+    report = Report(
+        hit_rate=0.0,
+        total_requests=500,
+        cached_blocks=0,
+        total_blocks=500,
+        by_tag={
+            "tenant": {
+                "t": TagStats(hit_rate=0.0, total_requests=500, cached_blocks=0, total_blocks=500)
+            }
+        },
+        by_tag_divergence={"tenant": {"t": positions}},
+    )
+
+    out = _render_report_human(report)
+
+    assert "block   0" in out
+    assert "block   1" in out
+    assert "block   2" in out
+    assert "block   3" not in out
+    assert "block   4" not in out
+
+
+def test_end_to_end_cli_prints_divergence_on_chen_scenario(tmp_path, capsys):
+    """The bundled example should surface the UUID diagnosis in one command."""
+    corpus = tmp_path / "chen.jsonl"
+    lines = []
+    for i in range(5):
+        lines.append(json.dumps({
+            "request_id": f"acme-{i}",
+            "token_ids": list(range(1000, 1000 + 64)),  # shared 4-block prefix
+            "tenant": "acme",
+        }))
+    for i in range(5):
+        # Unique first token per widgets request
+        tokens = [9_000_000 + i] + list(range(2001, 2001 + 63))  # 64 total
+        lines.append(json.dumps({
+            "request_id": f"widgets-{i}",
+            "token_ids": tokens,
+            "tenant": "widgets",
+        }))
+    corpus.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    exit_code = main(["analyze", str(corpus), "--block-size", "16", "--capacity-blocks", "1000"])
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "divergent positions for tenant=widgets" in out
+    assert "unique content per request" in out
+    # Acme has one miss (r0), no diagnostic message we care to assert on here.

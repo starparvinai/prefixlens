@@ -1,5 +1,30 @@
 # Design notes
 
+## Divergent-position attribution: the two diagnoses that share one symptom
+
+The load-bearing idea behind cache-killer attribution is that **the same first-divergent-block position can mean two very different things**, with opposite fixes.
+
+Say a tag bucket has 100 requests, all first-diverging at block position 3.
+
+- **World A — UUID injection.** Each request has *different* token content at block 3: a session UUID, a per-request timestamp, a request ID sitting near the top of the prompt. Every miss is a new block-hash in the tree; there was nothing to hit. **Fix: restructure the prompt.** Move the variable field somewhere the cache doesn't care about (e.g. the user message, past the shared prefix).
+- **World B — capacity thrashing.** Each request has *identical* token content at block 3, but they all still miss — because the block got evicted before the next request arrived. Same hash, wrong lifetime. **Fix: grow the cache.** The working set is bigger than what fits.
+
+A tool that reports "top divergent position: block 3, 100 misses" without separating these two worlds is only half-useful; the two fixes are opposite.
+
+`unique_content_ratio` is the discriminator. For the set of miss requests at a position, count the number of distinct token blocks appearing there and divide by the miss count:
+
+- Ratio ≈ 1.0 → every miss's block content is distinct → World A.
+- Ratio → 0 → every miss's block content is the same → World B.
+- Anything in between → mixed cause; the CLI labels it "mixed content" and asks the reader to look closer.
+
+### Why counting unique *token blocks* is the right question, not unique *block hashes*
+
+Block hashes are parent-chained: `hash(parent_hash + block_tokens)`. Two requests with the same tokens at position P but different chain-history at 0..P−1 have different block hashes at P. Counting unique hashes conflates *"different content"* with *"different history."* Counting unique raw-token blocks separates them — which is what "was the block content per-request-unique" actually asks.
+
+### Storage cost
+
+To answer the question after `process()` returns, the simulator retains the token content of only the diverging block on each `ProcessResult` (`diverging_block_tokens: tuple[int, ...] | None`). Full-hit requests carry `None`. Memory cost is O(one 16-token tuple per miss), not O(full prompt per request) — targeted retention, not a general "keep the whole thing" hack.
+
 ## The JSONL loader boundary
 
 The loader is where an on-disk trace becomes an in-memory `Request` stream. Three design decisions worth remembering:

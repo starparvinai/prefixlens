@@ -91,7 +91,51 @@ def _render_report_human(report: Report) -> str:
                     f"{_format_percent(stats.hit_rate)}  "
                     f"({stats.total_requests:,} req, {stats.cached_blocks:,}/{stats.total_blocks:,} blk)"
                 )
+
+    # Divergent-position section: only render for tag buckets that actually
+    # have misses. A UUID-case bucket (unique_content_ratio close to 1) prints
+    # a "unique content" tag; a thrashing bucket (ratio close to 0) prints
+    # "shared content" instead. This is the diagnosis, not just the number.
+    divergence_lines = _render_divergence_section(report)
+    if divergence_lines:
+        lines.append("")
+        lines.extend(divergence_lines)
+
     return "\n".join(lines)
+
+
+def _classify_content(ratio: float) -> str:
+    """Human-readable label for unique_content_ratio.
+
+    The cutoffs are intentional but not sacred: 0.9+ is 'basically all unique'
+    (UUID-shaped), 0.3 or less is 'basically all the same' (thrashing-shaped),
+    the middle is 'mixed' and the caller should look closer.
+    """
+    if ratio >= 0.9:
+        return "unique content per request"
+    if ratio <= 0.3:
+        return "shared content, thrashing"
+    return "mixed content"
+
+
+def _render_divergence_section(report) -> list[str]:
+    """Return the 'top divergent positions' block, empty if there's nothing to say."""
+    lines: list[str] = []
+    for tag_key in sorted(report.by_tag_divergence.keys()):
+        for tag_value in sorted(report.by_tag_divergence[tag_key].keys()):
+            positions = report.by_tag_divergence[tag_key][tag_value]
+            if not positions:
+                continue
+            top = positions[:3]  # top-3 by miss_count
+            lines.append(f"  divergent positions for {tag_key}={tag_value}:")
+            for p in top:
+                diagnosis = _classify_content(p.unique_content_ratio)
+                lines.append(
+                    f"    block {p.block_position:>3}  "
+                    f"{p.miss_count:>5,} miss  "
+                    f"({p.unique_content_ratio * 100:5.1f}% unique — {diagnosis})"
+                )
+    return lines
 
 
 def _report_to_json(report: Report) -> str:
