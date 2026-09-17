@@ -1,0 +1,228 @@
+prefixlens analyze — 2,850 requests, 104,764 blocks total
+
+  overall hit rate:  84.0%  (88,005 / 104,764 blocks)
+
+  by subject:
+    moral_scenarios                       88.8%  (50 req, 1,753/1,975 blk)
+    high_school_european_history          88.2%  (50 req, 7,669/8,699 blk)
+    elementary_mathematics                87.8%  (50 req, 1,372/1,563 blk)
+    high_school_us_history                87.7%  (50 req, 5,996/6,837 blk)
+    machine_learning                      87.5%  (50 req, 1,737/1,986 blk)
+    prehistory                            87.0%  (50 req, 1,323/1,521 blk)
+    high_school_geography                 86.8%  (50 req, 931/1,072 blk)
+    nutrition                             86.5%  (50 req, 1,519/1,757 blk)
+    electrical_engineering                86.4%  (50 req, 1,127/1,304 blk)
+    college_computer_science              86.4%  (50 req, 2,156/2,495 blk)
+    global_facts                          86.1%  (50 req, 1,003/1,165 blk)
+    high_school_computer_science          86.1%  (50 req, 2,257/2,622 blk)
+    security_studies                      85.3%  (50 req, 3,038/3,563 blk)
+    college_mathematics                   84.6%  (50 req, 1,519/1,796 blk)
+    high_school_mathematics               84.5%  (50 req, 1,330/1,574 blk)
+    business_ethics                       84.4%  (50 req, 1,429/1,693 blk)
+    astronomy                             84.3%  (50 req, 1,472/1,746 blk)
+    international_law                     84.3%  (50 req, 1,617/1,918 blk)
+    marketing                             84.3%  (50 req, 980/1,163 blk)
+    professional_psychology               84.0%  (50 req, 1,470/1,751 blk)
+    … and 37 more values (use --json for the full list)
+
+  divergent positions for subject=abstract_algebra:
+    block  18     46 miss  (100.0% unique — unique content per request)
+    block  19      3 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=anatomy:
+    block  17     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=astronomy:
+    block  30     47 miss  (100.0% unique — unique content per request)
+    block  31      2 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=business_ethics:
+    block  29     41 miss  (100.0% unique — unique content per request)
+    block  30      8 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=clinical_knowledge:
+    block  20     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=college_biology:
+    block  23     44 miss  (100.0% unique — unique content per request)
+    block  24      5 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=college_chemistry:
+    block  28     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=college_computer_science:
+    block  44     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=college_mathematics:
+    block  31     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=college_medicine:
+    block  23     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=college_physics:
+    block  25     45 miss  (100.0% unique — unique content per request)
+    block  26      2 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=computer_security:
+    block  18     48 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+    block  23      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=conceptual_physics:
+    block  15     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=econometrics:
+    block  31     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=electrical_engineering:
+    block  23     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=elementary_mathematics:
+    block  28     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=formal_logic:
+    block  30     20 miss  (100.0% unique — unique content per request)
+    block  32     10 miss  (100.0% unique — unique content per request)
+    block  29      9 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=global_facts:
+    block  20     28 miss  (100.0% unique — unique content per request)
+    block  21     19 miss  (100.0% unique — unique content per request)
+    block  22      2 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=high_school_biology:
+    block  26     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=high_school_chemistry:
+    block  24     40 miss  (100.0% unique — unique content per request)
+    block  25      9 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=high_school_computer_science:
+    block  46     46 miss  (100.0% unique — unique content per request)
+    block  47      3 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=high_school_european_history:
+    block 152     38 miss  (100.0% unique — unique content per request)
+    block 166      2 miss  (100.0% unique — unique content per request)
+    block 174      2 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=high_school_geography:
+    block  19     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=high_school_government_and_politics:
+    block  23     48 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+    block  24      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=high_school_macroeconomics:
+    block  18     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=high_school_mathematics:
+    block  27     45 miss  (100.0% unique — unique content per request)
+    block  28      2 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=high_school_microeconomics:
+    block  19     48 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+    block  20      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=high_school_physics:
+    block  27     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=high_school_psychology:
+    block  25     40 miss  (100.0% unique — unique content per request)
+    block  26      9 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=high_school_statistics:
+    block  41     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=high_school_us_history:
+    block 119     36 miss  (100.0% unique — unique content per request)
+    block 132      3 miss  (100.0% unique — unique content per request)
+    block 134      3 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=high_school_world_history:
+    block  67     34 miss  (100.0% unique — unique content per request)
+    block  76      3 miss  (100.0% unique — unique content per request)
+    block  75      2 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=human_aging:
+    block  15     41 miss  (100.0% unique — unique content per request)
+    block  16      8 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=human_sexuality:
+    block  16     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=international_law:
+    block  33     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=jurisprudence:
+    block  19     48 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+    block  20      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=logical_fallacies:
+    block  22     40 miss  (100.0% unique — unique content per request)
+    block  23      9 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=machine_learning:
+    block  35     27 miss  (100.0% unique — unique content per request)
+    block  36     22 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=management:
+    block  14     25 miss  (100.0% unique — unique content per request)
+    block  13     24 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=marketing:
+    block  20     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=medical_genetics:
+    block  16     40 miss  (100.0% unique — unique content per request)
+    block  17      9 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=miscellaneous:
+    block  14     47 miss  (100.0% unique — unique content per request)
+    block  15      2 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=moral_disputes:
+    block  24     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=moral_scenarios:
+    block  36     38 miss  (100.0% unique — unique content per request)
+    block  35     11 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=nutrition:
+    block  31     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=philosophy:
+    block  15     34 miss  (100.0% unique — unique content per request)
+    block  16     15 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=prehistory:
+    block  27     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=professional_accounting:
+    block  33     26 miss  (100.0% unique — unique content per request)
+    block  34     23 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=professional_law:
+    block  85     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=professional_medicine:
+    block  55     34 miss  (100.0% unique — unique content per request)
+    block  56     15 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=professional_psychology:
+    block  30     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=public_relations:
+    block  20     47 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+    block  21      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=security_studies:
+    block  62     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=sociology:
+    block  22     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=us_foreign_policy:
+    block  21     48 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=virology:
+    block  16     46 miss  (100.0% unique — unique content per request)
+    block  17      3 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for subject=world_religions:
+    block  13     49 miss  (100.0% unique — unique content per request)
+    block   0      1 miss  (100.0% unique — unique content per request)
