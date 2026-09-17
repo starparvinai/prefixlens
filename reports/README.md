@@ -5,6 +5,17 @@ Saved output from `prefixlens analyze` on real corpora, so results are reproduci
 - `*.txt` — human-readable summary (what `prefixlens analyze` prints).
 - `*.json` — full machine-readable report (what `--json` emits). Same content, everything included (no cardinality filtering).
 
+## Real-workload comparison at a glance
+
+| Corpus | Overall hit rate | Requests | Blocks | Runtime | Models |
+|---|---|---|---|---|---|
+| WildChat-1M (2K conv) | 70.2% | 5,832 | 404K | 3.05s | 2 |
+| LMSys-Chat-1M (2K conv) | **81.7%** | 3,817 | 178K | 1.3s | 25+ |
+
+Both corpora at block-size 16, capacity 4,096 blocks. Same tool, same flags — different workload shapes surface different signals.
+
+Why LMSys's overall is so much higher than WildChat's: 52% of LMSys's requests here are Vicuna-13b (the historical Chatbot Arena default), where users tended to have long extended dialogs → strong within-conversation prefix reuse.
+
 ## WildChat-1M sample (2K conversations, 5,832 requests)
 
 `wildchat_2k.{txt,json}` — the raw WildChat corpus (produced by `examples/build_wildchat_scenario.py`), analyzed at block-size 16, capacity 4096.
@@ -19,6 +30,31 @@ Per-model breakdown:
 | gpt-4-0314 | 65.0% | 2,406 |
 
 Divergent-position pattern: block 0 dominates for both models (~95–98% unique content). This is **inherent** to the WildChat workload — conversations are from many different users with no shared system prompt across users. Not a bug to fix; a workload shape to know.
+
+## LMSys-Chat-1M sample (2K conversations, 3,817 requests)
+
+`lmsys_2k.{txt,json}` — English-only slice of `lmsys/lmsys-chat-1m` (gated dataset; requires `hf auth login`).
+
+**Headline**: **81.7% overall hit rate** across 25+ distinct models. 62pp spread from best to worst:
+
+| Model | Hit rate | Requests | Notes |
+|---|---|---|---|
+| vicuna-13b | 86.7% | 1,985 | Historical Chatbot Arena default → long conversations → strong within-conversation reuse. |
+| stablelm-tuned-alpha-7b | 86.3% | 66 | |
+| wizardlm-13b | 76.4% | 77 | |
+| alpaca-13b | 75.0% | 222 | |
+| koala-13b | 72.8% | 380 | |
+| claude-1 | 69.0% | 66 | |
+| gpt-3.5-turbo | 66.2% | 41 | |
+| vicuna-33b | 65.7% | 110 | |
+| … | … | … | |
+| gpt-4 | 40.8% | 35 | Small sample; few conversations to accumulate reuse against. |
+| palm-2 | 32.1% | 32 | Same. |
+| RWKV-4-Raven-14B | 24.4% | 52 | Same. |
+
+**The 62pp spread is real but it's a workload artifact, not a model-quality signal.** Models with lots of requests (Vicuna-13b at 1,985) have long accumulated cache history to hit against; models with tiny samples (GPT-4 at 35, PaLM-2 at 32) are dominated by fresh-conversation starts. The tool correctly surfaces the pattern; the operator has to interpret it as *volume, not model choice*.
+
+Divergent-position pattern: block 0 dominates for every model, same as WildChat — no shared system prompt across LMSys users. This is a load-bearing property of ad-hoc multi-user traffic that both real-workload runs demonstrate.
 
 ## Injection scenarios (500 conversations, 1,323 requests each)
 

@@ -1,0 +1,122 @@
+prefixlens analyze — 3,817 requests, 177,508 blocks total
+
+  overall hit rate:  81.7%  (144,953 / 177,508 blocks)
+
+  by model:
+    vicuna-13b                86.7%  (1,985 req, 116,387/134,229 blk)
+    stablelm-tuned-alpha-7b   86.3%  (66 req, 3,416/3,958 blk)
+    wizardlm-13b              76.4%  (77 req, 1,820/2,383 blk)
+    alpaca-13b                75.0%  (222 req, 4,324/5,765 blk)
+    koala-13b                 72.8%  (380 req, 7,653/10,517 blk)
+    claude-1                  69.0%  (66 req, 1,955/2,832 blk)
+    gpt-3.5-turbo             66.2%  (41 req, 555/839 blk)
+    vicuna-33b                65.7%  (110 req, 2,313/3,523 blk)
+    vicuna-7b                 65.6%  (79 req, 1,835/2,798 blk)
+    guanaco-33b               60.2%  (36 req, 585/972 blk)
+    chatglm-6b                57.1%  (94 req, 1,296/2,268 blk)
+    llama-2-13b-chat          48.2%  (90 req, 881/1,829 blk)
+    claude-instant-1          48.1%  (40 req, 238/495 blk)
+    dolly-v2-12b              47.0%  (80 req, 574/1,220 blk)
+    gpt-4                     40.8%  (35 req, 208/510 blk)
+    fastchat-t5-3b            39.6%  (68 req, 224/566 blk)
+    palm-2                    32.1%  (32 req, 136/424 blk)
+    oasst-pythia-12b          27.4%  (84 req, 189/691 blk)
+    mpt-7b-chat               24.8%  (50 req, 125/505 blk)
+    RWKV-4-Raven-14B          24.4%  (52 req, 105/431 blk)
+    … and 5 more values (use --json for the full list)
+
+  divergent positions for model=RWKV-4-Raven-14B:
+    block   0     27 miss  (100.0% unique — unique content per request)
+    block   1      2 miss  (100.0% unique — unique content per request)
+    block   4      2 miss  (100.0% unique — unique content per request)
+  divergent positions for model=alpaca-13b:
+    block   0     70 miss  ( 98.6% unique — unique content per request)
+    block   1     17 miss  (100.0% unique — unique content per request)
+    block   4      5 miss  (100.0% unique — unique content per request)
+  divergent positions for model=chatglm-6b:
+    block   0     41 miss  ( 95.1% unique — unique content per request)
+    block   1      5 miss  (100.0% unique — unique content per request)
+    block   4      3 miss  (100.0% unique — unique content per request)
+  divergent positions for model=claude-1:
+    block   0     22 miss  (100.0% unique — unique content per request)
+    block   1      5 miss  (100.0% unique — unique content per request)
+    block   2      4 miss  (100.0% unique — unique content per request)
+  divergent positions for model=claude-2:
+    block   0      1 miss  (100.0% unique — unique content per request)
+  divergent positions for model=claude-instant-1:
+    block   0     16 miss  (100.0% unique — unique content per request)
+    block   2      4 miss  (100.0% unique — unique content per request)
+    block   4      1 miss  (100.0% unique — unique content per request)
+  divergent positions for model=dolly-v2-12b:
+    block   0     39 miss  ( 97.4% unique — unique content per request)
+    block   1      9 miss  ( 88.9% unique — mixed content)
+    block   2      4 miss  (100.0% unique — unique content per request)
+  divergent positions for model=fastchat-t5-3b:
+    block   0     34 miss  ( 94.1% unique — unique content per request)
+    block   3      3 miss  (100.0% unique — unique content per request)
+    block   4      3 miss  (100.0% unique — unique content per request)
+  divergent positions for model=gpt-3.5-turbo:
+    block   0     18 miss  (100.0% unique — unique content per request)
+    block   1      1 miss  (100.0% unique — unique content per request)
+    block   2      1 miss  (100.0% unique — unique content per request)
+  divergent positions for model=gpt-4:
+    block   0     14 miss  (100.0% unique — unique content per request)
+    block   5      2 miss  (100.0% unique — unique content per request)
+    block   2      1 miss  (100.0% unique — unique content per request)
+  divergent positions for model=gpt4all-13b-snoozy:
+    block   0      4 miss  (100.0% unique — unique content per request)
+  divergent positions for model=guanaco-33b:
+    block   0     15 miss  (100.0% unique — unique content per request)
+    block   3      2 miss  (100.0% unique — unique content per request)
+    block   2      1 miss  (100.0% unique — unique content per request)
+  divergent positions for model=koala-13b:
+    block   0    168 miss  ( 98.8% unique — unique content per request)
+    block   1     19 miss  (100.0% unique — unique content per request)
+    block   3      8 miss  (100.0% unique — unique content per request)
+  divergent positions for model=llama-13b:
+    block   0     46 miss  ( 93.5% unique — unique content per request)
+    block   1      6 miss  (100.0% unique — unique content per request)
+    block   3      3 miss  (100.0% unique — unique content per request)
+  divergent positions for model=llama-2-13b-chat:
+    block   0     42 miss  ( 97.6% unique — unique content per request)
+    block   1      4 miss  (100.0% unique — unique content per request)
+    block  10      2 miss  (100.0% unique — unique content per request)
+  divergent positions for model=llama-2-7b-chat:
+    block   0      3 miss  (100.0% unique — unique content per request)
+    block   1      2 miss  (100.0% unique — unique content per request)
+  divergent positions for model=mpt-30b-chat:
+    block   0     12 miss  (100.0% unique — unique content per request)
+    block   2      1 miss  (100.0% unique — unique content per request)
+    block  23      1 miss  (100.0% unique — unique content per request)
+  divergent positions for model=mpt-7b-chat:
+    block   0     25 miss  (100.0% unique — unique content per request)
+    block   1      3 miss  (100.0% unique — unique content per request)
+    block   2      1 miss  (100.0% unique — unique content per request)
+  divergent positions for model=oasst-pythia-12b:
+    block   0     51 miss  (100.0% unique — unique content per request)
+    block   1      7 miss  (100.0% unique — unique content per request)
+    block   3      2 miss  (100.0% unique — unique content per request)
+  divergent positions for model=palm-2:
+    block   0     12 miss  (100.0% unique — unique content per request)
+    block   2      2 miss  (100.0% unique — unique content per request)
+    block   1      1 miss  (100.0% unique — unique content per request)
+  divergent positions for model=stablelm-tuned-alpha-7b:
+    block   0     17 miss  (100.0% unique — unique content per request)
+    block   1      3 miss  (100.0% unique — unique content per request)
+    block   2      3 miss  (100.0% unique — unique content per request)
+  divergent positions for model=vicuna-13b:
+    block   0    680 miss  ( 97.1% unique — unique content per request)
+    block   3    113 miss  ( 95.6% unique — unique content per request)
+    block   1    106 miss  (100.0% unique — unique content per request)
+  divergent positions for model=vicuna-33b:
+    block   0     43 miss  ( 97.7% unique — unique content per request)
+    block   2      3 miss  (100.0% unique — unique content per request)
+    block  25      3 miss  (100.0% unique — unique content per request)
+  divergent positions for model=vicuna-7b:
+    block   0     37 miss  ( 97.3% unique — unique content per request)
+    block   1      4 miss  (100.0% unique — unique content per request)
+    block   2      3 miss  (100.0% unique — unique content per request)
+  divergent positions for model=wizardlm-13b:
+    block   0     26 miss  ( 88.5% unique — mixed content)
+    block   1      3 miss  (100.0% unique — unique content per request)
+    block   2      3 miss  (100.0% unique — unique content per request)
