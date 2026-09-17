@@ -1,19 +1,56 @@
 [project]
 name = "prefixlens"
-version = "0.0.1"
-description = "Cache-attribution analyzer for LLM prefix caches"
+version = "0.1.0"
+description = "Cache-attribution analyzer for LLM prefix caches: per-request, per-tag, per-token divergence attribution the engine can't give you."
 readme = "README.md"
 requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Star Parvin", email = "tidesandshots@gmail.com" },
+]
+keywords = [
+    "llm",
+    "inference",
+    "vllm",
+    "prefix-cache",
+    "kv-cache",
+    "cache-analysis",
+    "diagnostic",
+    "sglang",
+    "trt-llm",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Monitoring",
+]
 dependencies = []
 
 [project.scripts]
 prefixlens = "prefixlens.cli:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0"]
+dev = ["pytest>=7.0", "build>=1.0", "twine>=4.0"]
+
+[project.urls]
+Homepage = "https://github.com/starparvinai/prefixlens"
+Repository = "https://github.com/starparvinai/prefixlens"
+Issues = "https://github.com/starparvinai/prefixlens/issues"
+Changelog = "https://github.com/starparvinai/prefixlens/blob/main/CHANGELOG.md"
 
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
