@@ -45,3 +45,9 @@ htmlcov/
 /traces/
 /scratch/
 *.jsonl.local
+
+# Bulk WildChat / LMSys / real-corpus artifacts — regenerable via the adapter
+# scripts under examples/. The bundled chen_multitenant.jsonl IS checked in.
+examples/wildchat_scenario.jsonl
+examples/lmsys_scenario.jsonl
+examples/*_scenario_full.jsonl

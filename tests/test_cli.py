@@ -554,6 +554,138 @@ def test_explain_truncates_long_blocks_in_human_output(tmp_path, capsys):
     assert "…" in out
 
 
+# ---- tag filtering (--tag + cardinality auto-suppress) -------------------
+
+
+def _make_report_with_axes(axis_specs: dict[str, int], total_requests: int) -> Report:
+    """Build a Report with the given axes, each having `n_values` distinct tag
+    values. Every value is a size-1 bucket for simplicity; hit rates are
+    all-hit (irrelevant to the axis-selection logic under test)."""
+    by_tag = {}
+    for axis, n_values in axis_specs.items():
+        by_tag[axis] = {
+            f"v{i}": TagStats(hit_rate=1.0, total_requests=1, cached_blocks=1, total_blocks=1)
+            for i in range(n_values)
+        }
+    return Report(
+        hit_rate=1.0,
+        total_requests=total_requests,
+        cached_blocks=total_requests,
+        total_blocks=total_requests,
+        by_tag=by_tag,
+    )
+
+
+def test_low_cardinality_axis_is_rendered_by_default():
+    # 3 tenants over 100 requests: 3 unique / 100 = 3% ratio; well under threshold.
+    report = _make_report_with_axes({"tenant": 3}, total_requests=100)
+    out = _render_report_human(report)
+    assert "by tenant:" in out
+    assert "suppressed" not in out
+
+
+def test_high_cardinality_axis_is_suppressed_by_default():
+    # 500 conversation_ids over 500 requests: 100% unique. Should be hidden.
+    report = _make_report_with_axes({"conversation_id": 500}, total_requests=500)
+    out = _render_report_human(report)
+    # Section content itself is hidden
+    assert "  by conversation_id:\n    v" not in out
+    # But a "suppressed" hint appears
+    assert "conversation_id" in out
+    assert "suppressed" in out
+    assert "pass --tag conversation_id" in out
+
+
+def test_tag_whitelist_forces_high_cardinality_axis_to_render():
+    report = _make_report_with_axes({"conversation_id": 30}, total_requests=30)
+    out = _render_report_human(report, user_tags=["conversation_id"])
+    assert "by conversation_id:" in out
+    # And no "suppressed" hint since we asked for it explicitly
+    assert "suppressed" not in out
+
+
+def test_tag_whitelist_hides_axes_not_in_the_list():
+    # Two axes both low-cardinality; whitelist only asks for one.
+    report = _make_report_with_axes({"tenant": 3, "route": 4}, total_requests=100)
+
+    out = _render_report_human(report, user_tags=["tenant"])
+
+    assert "by tenant:" in out
+    assert "by route:" not in out
+
+
+def test_high_cardinality_but_low_absolute_count_is_still_shown():
+    # 5 tenants over 5 requests = 100% unique BUT only 5 absolute values.
+    # We show it — the operator wants to see their few buckets even if one-per-request.
+    # (The rule requires BOTH conditions to hit for suppression.)
+    report = _make_report_with_axes({"tenant": 5}, total_requests=5)
+
+    out = _render_report_human(report)
+
+    assert "by tenant:" in out
+    assert "suppressed" not in out
+
+
+def test_value_row_cap_shows_first_twenty_and_summarizes_the_rest():
+    # 100 values under one axis, low ratio (100/10000 = 1%) so axis is kept.
+    report = _make_report_with_axes({"model": 100}, total_requests=10_000)
+
+    out = _render_report_human(report)
+
+    assert "by model:" in out
+    # v0..v19 (20 rows) shown, v20..v99 rolled up
+    assert "v0 " in out or "v0  " in out  # first value present
+    assert "and 80 more" in out
+
+
+def test_json_output_is_unfiltered_even_when_axis_would_be_suppressed(tmp_path, capsys):
+    # High-cardinality axis in the corpus — JSON should still carry it in full.
+    lines = []
+    for i in range(50):
+        lines.append(json.dumps({
+            "token_ids": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+            "tags": {"conversation_id": f"conv-{i}"},
+        }))
+    corpus = tmp_path / "hicard.jsonl"
+    corpus.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    exit_code = main(["analyze", str(corpus), "--block-size", "16", "--capacity-blocks", "100", "--json"])
+
+    assert exit_code == 0
+    parsed = json.loads(capsys.readouterr().out)
+    # Every conversation_id present in JSON
+    assert len(parsed["by_tag"]["conversation_id"]) == 50
+
+
+def test_tag_flag_via_cli_end_to_end(tmp_path, capsys):
+    # Same corpus, human rendering. Without --tag: suppressed. With --tag: shown.
+    lines = []
+    for i in range(50):
+        lines.append(json.dumps({
+            "token_ids": list(range(16)),
+            "tags": {"conversation_id": f"conv-{i}"},
+        }))
+    corpus = tmp_path / "hicard.jsonl"
+    corpus.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    # Without --tag: suppressed
+    main(["analyze", str(corpus), "--block-size", "16", "--capacity-blocks", "100"])
+    out_no_tag = capsys.readouterr().out
+    assert "suppressed" in out_no_tag
+    assert "pass --tag conversation_id" in out_no_tag
+
+    # With --tag: shown (albeit capped at 20 rows)
+    main([
+        "analyze", str(corpus),
+        "--block-size", "16", "--capacity-blocks", "100",
+        "--tag", "conversation_id",
+    ])
+    out_with_tag = capsys.readouterr().out
+    assert "by conversation_id:" in out_with_tag
+    assert "suppressed" not in out_with_tag
+    assert "and 30 more" in out_with_tag  # 50 values, cap 20 → 30 rolled up
+
+
 def test_end_to_end_cli_prints_divergence_on_chen_scenario(tmp_path, capsys):
     """The bundled example should surface the UUID diagnosis in one command."""
     corpus = tmp_path / "chen.jsonl"

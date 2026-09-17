@@ -57,10 +57,22 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Cache capacity in blocks (default: 4096).",
     )
     analyze.add_argument(
+        "--tag",
+        action="append",
+        dest="tags",
+        default=None,
+        metavar="NAME",
+        help="Only render this tag axis in the human report. Repeatable. "
+        "Without --tag, high-cardinality axes (many unique values, most of "
+        "them size-1) are auto-suppressed with a hint so the report stays "
+        "readable on real workloads. --json output is always unfiltered.",
+    )
+    analyze.add_argument(
         "--json",
         action="store_true",
         help="Emit the report as JSON on stdout instead of the human-readable "
-        "summary. Suitable for piping into jq or downstream tooling.",
+        "summary. Suitable for piping into jq or downstream tooling. Unfiltered — "
+        "every tag axis is included regardless of --tag.",
     )
 
     validate = subparsers.add_parser(
@@ -161,7 +173,47 @@ def _format_percent(x: float) -> str:
     return f"{x * 100:5.1f}%"
 
 
-def _render_report_human(report: Report) -> str:
+# Cardinality thresholds for the "which tag axes are worth aggregating on"
+# heuristic. An axis is suppressed only if BOTH conditions hold — small
+# workloads with a lot of tenants (say 30 tenants over 50 requests) legitimately
+# have high unique-ratio, but are still useful to show. Only the pathological
+# case (many unique values AND most requests get their own bucket) gets hidden.
+_MAX_TAG_VALUES_SHOWN = 20  # per axis, in human output
+_CARDINALITY_ABS_THRESHOLD = 20  # unique-value count above which we care
+_CARDINALITY_RATIO_THRESHOLD = 0.25  # unique-values / total-requests
+
+
+def _select_tag_axes(
+    report: Report,
+    user_include: list[str] | None,
+) -> tuple[list[str], list[tuple[str, int, float]]]:
+    """Decide which tag axes to render.
+
+    Returns (kept_axes_in_order, suppressed_hints).
+
+    - If `user_include` is given, use it as an explicit whitelist (order
+      preserved for reproducible output). No suppression logic.
+    - Otherwise, apply the cardinality heuristic: an axis is suppressed only
+      when it exceeds BOTH the absolute threshold and the unique-ratio
+      threshold — real workloads with a few dozen tenants stay visible.
+    """
+    if user_include:
+        return [t for t in user_include if t in report.by_tag], []
+
+    kept: list[str] = []
+    suppressed: list[tuple[str, int, float]] = []
+    total = report.total_requests
+    for k in sorted(report.by_tag.keys()):
+        n_unique = len(report.by_tag[k])
+        ratio = n_unique / total if total else 0.0
+        if n_unique > _CARDINALITY_ABS_THRESHOLD and ratio > _CARDINALITY_RATIO_THRESHOLD:
+            suppressed.append((k, n_unique, ratio))
+        else:
+            kept.append(k)
+    return kept, suppressed
+
+
+def _render_report_human(report: Report, user_tags: list[str] | None = None) -> str:
     """The README-style summary. Kept single-purpose (no I/O) so it is testable."""
     lines: list[str] = []
     lines.append(
@@ -172,12 +224,14 @@ def _render_report_human(report: Report) -> str:
     lines.append(f"  overall hit rate: {_format_percent(report.hit_rate)}  "
                  f"({report.cached_blocks:,} / {report.total_blocks:,} blocks)")
 
-    if report.by_tag:
+    kept_axes, suppressed_hints = _select_tag_axes(report, user_tags)
+
+    if kept_axes:
         lines.append("")
         # Sort tag keys alphabetically for deterministic output; within a key,
         # sort tag values by descending hit rate — the "who's fine, who's broken"
         # ordering the user is actually scanning for.
-        for tag_key in sorted(report.by_tag.keys()):
+        for tag_key in kept_axes:
             lines.append(f"  by {tag_key}:")
             values = sorted(
                 report.by_tag[tag_key].items(),
@@ -185,18 +239,29 @@ def _render_report_human(report: Report) -> str:
             )
             # Column width so the values align regardless of key length.
             max_name = max(len(v) for v, _ in values)
-            for tag_value, stats in values:
+            shown = values[:_MAX_TAG_VALUES_SHOWN]
+            for tag_value, stats in shown:
                 lines.append(
                     f"    {tag_value:<{max_name}}  "
                     f"{_format_percent(stats.hit_rate)}  "
                     f"({stats.total_requests:,} req, {stats.cached_blocks:,}/{stats.total_blocks:,} blk)"
                 )
+            if len(values) > _MAX_TAG_VALUES_SHOWN:
+                lines.append(f"    … and {len(values) - _MAX_TAG_VALUES_SHOWN:,} more values (use --json for the full list)")
+
+    if suppressed_hints:
+        lines.append("")
+        for tag_key, n_unique, ratio in suppressed_hints:
+            lines.append(
+                f"  by {tag_key}: suppressed ({n_unique:,} unique values, "
+                f"{ratio * 100:.1f}% unique — pass --tag {tag_key} to include)"
+            )
 
     # Divergent-position section: only render for tag buckets that actually
     # have misses. A UUID-case bucket (unique_content_ratio close to 1) prints
     # a "unique content" tag; a thrashing bucket (ratio close to 0) prints
     # "shared content" instead. This is the diagnosis, not just the number.
-    divergence_lines = _render_divergence_section(report)
+    divergence_lines = _render_divergence_section(report, kept_axes)
     if divergence_lines:
         lines.append("")
         lines.extend(divergence_lines)
@@ -218,10 +283,16 @@ def _classify_content(ratio: float) -> str:
     return "mixed content"
 
 
-def _render_divergence_section(report) -> list[str]:
-    """Return the 'top divergent positions' block, empty if there's nothing to say."""
+def _render_divergence_section(report, allowed_tag_keys: list[str] | None = None) -> list[str]:
+    """Return the 'top divergent positions' block, empty if there's nothing
+    to say. When allowed_tag_keys is given, only those axes appear — mirrors
+    the by_tag filter so operators don't see divergence sections for axes
+    the summary hid."""
     lines: list[str] = []
-    for tag_key in sorted(report.by_tag_divergence.keys()):
+    tag_keys = allowed_tag_keys if allowed_tag_keys is not None else sorted(report.by_tag_divergence.keys())
+    for tag_key in tag_keys:
+        if tag_key not in report.by_tag_divergence:
+            continue
         for tag_value in sorted(report.by_tag_divergence[tag_key].keys()):
             positions = report.by_tag_divergence[tag_key][tag_value]
             if not positions:
@@ -258,9 +329,10 @@ def _run_analyze(args: argparse.Namespace) -> int:
     report = sim.report()
 
     if args.json:
+        # JSON is always the full report — programmatic consumers get everything.
         print(_report_to_json(report))
     else:
-        print(_render_report_human(report))
+        print(_render_report_human(report, user_tags=args.tags))
     return 0
 
 
