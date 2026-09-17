@@ -1,0 +1,16 @@
+prefixlens analyze — 5,832 requests, 403,823 blocks total
+
+  overall hit rate:  70.2%  (283,327 / 403,823 blocks)
+
+  by model:
+    gpt-3.5-turbo-0301   75.5%  (3,426 req, 149,803/198,324 blk)
+    gpt-4-0314           65.0%  (2,406 req, 133,524/205,499 blk)
+
+  divergent positions for model=gpt-3.5-turbo-0301:
+    block   0    698 miss  ( 97.9% unique — unique content per request)
+    block   1    176 miss  (100.0% unique — unique content per request)
+    block   2     73 miss  (100.0% unique — unique content per request)
+  divergent positions for model=gpt-4-0314:
+    block   0    785 miss  ( 95.4% unique — unique content per request)
+    block   1    157 miss  ( 99.4% unique — unique content per request)
+    block   2     57 miss  (100.0% unique — unique content per request)
