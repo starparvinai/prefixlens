@@ -51,3 +51,4 @@ htmlcov/
 examples/wildchat_scenario.jsonl
 examples/lmsys_scenario.jsonl
 examples/*_scenario_full.jsonl
+examples/injection_*.jsonl
